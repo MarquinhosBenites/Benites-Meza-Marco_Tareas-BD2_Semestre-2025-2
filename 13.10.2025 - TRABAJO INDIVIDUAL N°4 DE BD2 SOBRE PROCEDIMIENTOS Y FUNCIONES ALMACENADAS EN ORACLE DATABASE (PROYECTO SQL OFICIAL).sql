@@ -1,0 +1,222 @@
+-- BD2 - Trabajo N°4: Procedimientos y Funciones almacenadas en Oracle Database
+-- Autor del informe: Benites Meza, Marco Fabricio
+-- Fecha: 13-Oct-2025
+-- ---------------------------------------------------------------
+-- Estructura del esquema S-P-J / SP / SPJ y ejercicios 4.1–4.17
+-- ---------------------------------------------------------------
+
+-- (1) Limpieza segura (ejecutar si existen previamente)
+WHENEVER SQLERROR CONTINUE;
+DROP TABLE SPJ CASCADE CONSTRAINTS PURGE;
+DROP TABLE SP  CASCADE CONSTRAINTS PURGE;
+DROP TABLE J   CASCADE CONSTRAINTS PURGE;
+DROP TABLE P   CASCADE CONSTRAINTS PURGE;
+DROP TABLE S   CASCADE CONSTRAINTS PURGE;
+WHENEVER SQLERROR EXIT ROLLBACK;
+
+-- (2) Tablas base clásicas del esquema
+
+-- Proveedores
+CREATE TABLE S (
+  S#     VARCHAR2(10)  CONSTRAINT PK_S PRIMARY KEY,
+  SNAME  VARCHAR2(50)  NOT NULL,
+  STATUS NUMBER(5),
+  CITY   VARCHAR2(50)  NOT NULL
+);
+
+-- Partes
+CREATE TABLE P (
+  P#      VARCHAR2(10) CONSTRAINT PK_P PRIMARY KEY,
+  PNAME   VARCHAR2(50) NOT NULL,
+  COLOR   VARCHAR2(30) NOT NULL,
+  WEIGHT  NUMBER(10,2) NOT NULL, -- libras
+  CITY    VARCHAR2(50) NOT NULL
+);
+
+-- Proyectos
+CREATE TABLE J (
+  J#     VARCHAR2(10)  CONSTRAINT PK_J PRIMARY KEY,
+  JNAME  VARCHAR2(50)  NOT NULL,
+  CITY   VARCHAR2(50)  NOT NULL
+);
+
+-- Envíos (a partes) S-P
+CREATE TABLE SP (
+  S#   VARCHAR2(10) NOT NULL,
+  P#   VARCHAR2(10) NOT NULL,
+  QTY  NUMBER(12,2) DEFAULT 0 NOT NULL,
+  CONSTRAINT PK_SP PRIMARY KEY (S#, P#),
+  CONSTRAINT FK_SP_S FOREIGN KEY (S#) REFERENCES S (S#),
+  CONSTRAINT FK_SP_P FOREIGN KEY (P#) REFERENCES P (P#)
+);
+
+-- Envíos a Proyectos S-P-J
+CREATE TABLE SPJ (
+  S#   VARCHAR2(10) NOT NULL,
+  P#   VARCHAR2(10) NOT NULL,
+  J#   VARCHAR2(10) NOT NULL,
+  QTY  NUMBER(12,2) DEFAULT 0 NOT NULL,
+  CONSTRAINT PK_SPJ PRIMARY KEY (S#, P#, J#),
+  CONSTRAINT FK_SPJ_S FOREIGN KEY (S#) REFERENCES S (S#),
+  CONSTRAINT FK_SPJ_P FOREIGN KEY (P#) REFERENCES P (P#),
+  CONSTRAINT FK_SPJ_J FOREIGN KEY (J#) REFERENCES J (J#)
+);
+
+-- (3) Datos mínimos (semilla) para poder probar las consultas y FKs
+-- Nota: Son datos ilustrativos, puedes reemplazarlos por tu dataset oficial.
+
+INSERT INTO S (S#, SNAME, STATUS, CITY) VALUES ('S1', 'Supplier 1', 20, 'Paris');
+INSERT INTO S (S#, SNAME, STATUS, CITY) VALUES ('S2', 'Supplier 2', 10, 'London');
+INSERT INTO S (S#, SNAME, STATUS, CITY) VALUES ('S3', 'Supplier 3', 30, 'Athens');
+INSERT INTO S (S#, SNAME, STATUS, CITY) VALUES ('S4', 'Supplier 4', 20, 'Oslo');
+INSERT INTO S (S#, SNAME, STATUS, CITY) VALUES ('S5', 'Supplier 5', 30, 'Madrid');
+
+INSERT INTO P (P#, PNAME, COLOR, WEIGHT, CITY) VALUES ('P1', 'Part 1', 'Red',     12.00, 'Paris');
+INSERT INTO P (P#, PNAME, COLOR, WEIGHT, CITY) VALUES ('P2', 'Part 2', 'Blue',    15.50, 'London');
+INSERT INTO P (P#, PNAME, COLOR, WEIGHT, CITY) VALUES ('P3', 'Part 3', 'Green',   17.00, 'London');
+INSERT INTO P (P#, PNAME, COLOR, WEIGHT, CITY) VALUES ('P4', 'Part 4', 'Yellow',  9.00,  'Athens');
+INSERT INTO P (P#, PNAME, COLOR, WEIGHT, CITY) VALUES ('P5', 'Part 5', 'Black',   20.00, 'Madrid');
+INSERT INTO P (P#, PNAME, COLOR, WEIGHT, CITY) VALUES ('P6', 'Part 6', 'White',   11.00, 'Oslo');
+
+INSERT INTO J (J#, JNAME, CITY) VALUES ('J1', 'Project 1', 'Paris');
+INSERT INTO J (J#, JNAME, CITY) VALUES ('J2', 'Project 2', 'London');
+INSERT INTO J (J#, JNAME, CITY) VALUES ('J3', 'Project 3', 'Athens');
+INSERT INTO J (J#, JNAME, CITY) VALUES ('J4', 'Project 4', 'Oslo');
+INSERT INTO J (J#, JNAME, CITY) VALUES ('J5', 'Project 5', 'Madrid');
+INSERT INTO J (J#, JNAME, CITY) VALUES ('J6', 'Project 6', 'Rome');
+INSERT INTO J (J#, JNAME, CITY) VALUES ('J7', 'Project 7', 'Berlin');
+
+-- Semilla SP (para consultas 4.7, 4.9, 4.10, etc.)
+INSERT INTO SP (S#, P#, QTY) VALUES ('S1', 'P1', 100);
+INSERT INTO SP (S#, P#, QTY) VALUES ('S1', 'P2', 200);
+INSERT INTO SP (S#, P#, QTY) VALUES ('S2', 'P2', 300);
+INSERT INTO SP (S#, P#, QTY) VALUES ('S2', 'P3', 400);
+INSERT INTO SP (S#, P#, QTY) VALUES ('S3', 'P4', 250);
+INSERT INTO SP (S#, P#, QTY) VALUES ('S4', 'P6', 150);
+INSERT INTO SP (S#, P#, QTY) VALUES ('S5', 'P2', 100);
+INSERT INTO SP (S#, P#, QTY) VALUES ('S5', 'P5', 500);
+INSERT INTO SP (S#, P#, QTY) VALUES ('S5', 'P6', 200);
+
+-- Datos SPJ exactamente como en el informe
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S1','P1','J1',200);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S1','P1','J4',700);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S2','P3','J1',400);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S2','P3','J2',200);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S2','P3','J3',200);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S2','P3','J4',500);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S2','P3','J5',600);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S2','P3','J6',400);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S2','P3','J7',800);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S2','P5','J2',100);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S3','P3','J1',200);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S3','P4','J2',500);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S4','P6','J3',300);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S4','P6','J7',300);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S5','P2','J2',200);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S5','P2','J4',100);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S5','P5','J5',500);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S5','P5','J7',100);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S5','P6','J2',200);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S5','P1','J4',100);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S5','P3','J4',200);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S5','P4','J4',800);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S5','P5','J4',400);
+INSERT INTO SPJ (S#, P#, J#, QTY) VALUES ('S5','P6','J4',500);
+
+COMMIT;
+
+-- (4) Objetos PL/SQL del informe
+
+-- 4.2.B Función para convertir libras a gramos
+CREATE OR REPLACE FUNCTION LBS_TO_GRAMS(p_lbs NUMBER) RETURN NUMBER IS
+BEGIN
+  RETURN p_lbs * 453.59237;
+END;
+/
+
+-- 4.7.B Procedimiento para mostrar total de proveedores
+CREATE OR REPLACE PROCEDURE SHOW_TOTAL_PROVIDERS IS
+  v_total NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_total FROM S;
+  DBMS_OUTPUT.PUT_LINE('Total proveedores: ' || v_total);
+END;
+/
+
+-- (Opcional) Habilitar salida si se usa SQL*Plus / SQL Developer
+-- SET SERVEROUTPUT ON
+-- EXEC SHOW_TOTAL_PROVIDERS;
+
+-- (5) Consultas del apartado 4 (listas para ejecutar)
+
+-- 4.1
+-- Obtenga el color y ciudad para las partes que no son de París, con un peso > 10.
+--
+-- SELECT COLOR, CITY
+-- FROM P
+-- WHERE CITY <> 'Paris'
+--   AND WEIGHT > 10;
+
+-- 4.2.A & 4.2.B
+-- SELECT P#, PNAME, WEIGHT AS WEIGHT_LBS, WEIGHT * 453.59237 AS WEIGHT_GRAMS FROM P;
+-- SELECT P#, PNAME, WEIGHT, LBS_TO_GRAMS(WEIGHT) AS WEIGHT_GRAMS FROM P;
+
+-- 4.3
+-- SELECT * FROM S ORDER BY S#;
+
+-- 4.4
+-- SELECT S.S#, S.SNAME, P.P#, P.PNAME, S.CITY
+-- FROM S JOIN P ON S.CITY = P.CITY
+-- ORDER BY S.S#, P.P#;
+
+-- 4.5
+-- SELECT DISTINCT S.CITY AS PROV_CITY, P.CITY AS PART_CITY
+-- FROM S JOIN SP ON S.S# = SP.S# JOIN P ON SP.P# = P.P#
+-- ORDER BY PROV_CITY, PART_CITY;
+
+-- 4.6
+-- SELECT s1.S# AS S1, s2.S# AS S2, s1.CITY
+-- FROM S s1 JOIN S s2 ON s1.CITY = s2.CITY AND s1.S# < s2.S#
+-- ORDER BY s1.CITY, s1.S#, s2.S#;
+
+-- 4.7.A
+-- SELECT COUNT(*) AS TOTAL_PROVEEDORES FROM S;
+
+-- 4.8
+-- SELECT MIN(QTY) AS MIN_QTY, MAX(QTY) AS MAX_QTY FROM SP WHERE P# = 'P2';
+
+-- 4.9 (dos variantes)
+-- SELECT P#, SUM(QTY) AS TOTAL_DESPACHADO FROM SP GROUP BY P# ORDER BY P#;
+-- SELECT P.P#, COALESCE(SUM(SP.QTY),0) AS TOTAL_DESPACHADO FROM P LEFT JOIN SP ON P.P# = SP.P# GROUP BY P.P# ORDER BY P.P#;
+
+-- 4.10
+-- SELECT P# FROM SP GROUP BY P# HAVING COUNT(DISTINCT S#) > 1;
+
+-- 4.11
+-- SELECT DISTINCT S.SNAME FROM S JOIN SP ON S.S# = SP.S# WHERE SP.P# = 'P2';
+
+-- 4.12
+-- SELECT DISTINCT S.SNAME FROM S WHERE EXISTS (SELECT 1 FROM SP WHERE SP.S# = S.S#);
+
+-- 4.13
+-- SELECT S# FROM S WHERE STATUS < (SELECT MAX(STATUS) FROM S);
+
+-- 4.14
+-- SELECT SNAME FROM S WHERE EXISTS (SELECT 1 FROM SP WHERE SP.S# = S.S# AND SP.P# = 'P2');
+
+-- 4.15
+-- SELECT SNAME FROM S WHERE NOT EXISTS (SELECT 1 FROM SP WHERE SP.S# = S.S# AND SP.P# = 'P2');
+
+-- 4.16 (dos variantes)
+-- SELECT S.SNAME FROM S JOIN (SELECT S#, COUNT(DISTINCT P#) AS CNT_PARTES FROM SP GROUP BY S#) sp_count ON S.S# = sp_count.S#
+-- WHERE sp_count.CNT_PARTES = (SELECT COUNT(*) FROM P);
+-- SELECT SNAME FROM S WHERE NOT EXISTS (SELECT 1 FROM P WHERE NOT EXISTS (SELECT 1 FROM SP WHERE SP.S# = S.S# AND SP.P# = P.P#));
+
+-- 4.17 (dos variantes)
+-- SELECT P# FROM P WHERE WEIGHT > 16
+-- UNION
+-- SELECT DISTINCT P# FROM SP WHERE S# = 'S2';
+-- SELECT DISTINCT P.P# FROM P LEFT JOIN SP ON P.P# = SP.P#
+-- WHERE P.WEIGHT > 16 OR SP.S# = 'S2';
+
+-- Fin del script.
